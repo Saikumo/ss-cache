@@ -37,8 +37,8 @@ func TestAdd(t *testing.T) {
 func TestEvict(t *testing.T) {
 	k1, k2, k3 := "key1", "key2", "key3"
 	v1, v2, v3 := "value1", "value2", "value3"
-	cap := len(k1 + k2 + v1 + v2)
-	lruCache := NewCache(uint64(cap), nil)
+	capacity := len(k1 + k2 + v1 + v2)
+	lruCache := NewCache(uint64(capacity), nil)
 
 	lruCache.Add(k1, String(v1))
 	lruCache.Add(k2, String(v2))
@@ -53,14 +53,14 @@ func TestEvict(t *testing.T) {
 func TestOnEvict(t *testing.T) {
 	k1, k2, k3, k4 := "key1", "key2", "key3", "key4"
 	v1, v2, v3, v4 := "value1", "value2", "value3", "value4"
-	cap := len(k1 + k2 + v1 + v2)
+	capacity := len(k1 + k2 + v1 + v2)
 
 	keys := make([]string, 0)
 	expectKeys := []string{"key1", "key2"}
 	onEvictCallback := func(key string, value Value) {
 		keys = append(keys, key)
 	}
-	lruCache := NewCache(uint64(cap), onEvictCallback)
+	lruCache := NewCache(uint64(capacity), onEvictCallback)
 
 	lruCache.Add(k1, String(v1))
 	lruCache.Add(k2, String(v2))
