@@ -28,12 +28,12 @@ type Cache struct {
 }
 
 // Get 缓存查找
-func (c *Cache) Get(key string) (value Value, ok bool) {
+func (c *Cache) Get(key string) (value Value, exist bool) {
 	//key存在，该结点移动到队尾（代表刚被使用过）,返回值
-	if ele, ok := c.cacheMap[key]; ok {
+	if ele, exist := c.cacheMap[key]; exist {
 		c.queue.MoveToBack(ele)
 		entry := ele.Value.(*entry)
-		return entry.value, ok
+		return entry.value, exist
 	}
 	return
 }
