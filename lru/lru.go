@@ -18,7 +18,7 @@ func (entry *entry) UsedBytes() uint64 {
 	return uint64(len(entry.key)) + entry.value.UsedBytes()
 }
 
-// Cache LRU结构体
+// Cache LRU缓存结构体 并发不安全！
 type Cache struct {
 	maxBytes  uint64                        //最大内存
 	usedBytes uint64                        //使用的内存
