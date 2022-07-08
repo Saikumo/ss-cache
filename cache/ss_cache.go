@@ -26,9 +26,10 @@ var (
 
 // Group 相当于缓存命名空间，与数据源有关
 type Group struct {
-	name      string //名称
-	getter    Getter //回调函数
-	mainCache cache  //缓存
+	name      string     //名称
+	getter    Getter     //回调函数
+	mainCache cache      //缓存
+	peers     PeerPicker //节点选取器
 }
 
 // Get 缓存获取
@@ -48,9 +49,29 @@ func (g *Group) Get(key string) (ByteView, error) {
 
 //缓存加载
 func (g *Group) load(key string) (ByteView, error) {
-	//TODO 远程加载缓存
+	//远程加载缓存
+	if g.peers != nil {
+		if peerGetter, ok := g.peers.PickPeer(key); ok {
+			if v, err := g.getFromPeer(peerGetter, key); err == nil {
+				//填充缓存
+				g.populateCache(key, v)
+				return v, nil
+			}
+			log.Printf("[ss-cache]从远程节点加载缓存失败")
+		}
+	}
+
 	//调用回调函数从本地加载缓存
 	return g.getLocally(key)
+}
+
+// 从远程节点加载缓存
+func (g *Group) getFromPeer(getter PeerGetter, key string) (ByteView, error) {
+	bytes, err := getter.Get(g.name, key)
+	if err != nil {
+		return ByteView{}, err
+	}
+	return ByteView{b: cloneBytes(bytes)}, nil
 }
 
 //调用回调函数从本地加载缓存
@@ -70,6 +91,14 @@ func (g *Group) getLocally(key string) (ByteView, error) {
 //填充缓存
 func (g *Group) populateCache(key string, value ByteView) {
 	g.mainCache.add(key, value)
+}
+
+// RegisterPeers 注册节点选取器来选取远程节点
+func (g *Group) RegisterPeers(peers PeerPicker) {
+	if g.peers != nil {
+		panic("只能注册一次节点选取器")
+	}
+	g.peers = peers
 }
 
 // NewGroup 创建一个Group实例
