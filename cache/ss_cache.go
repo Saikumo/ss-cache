@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"log"
+	"saikumo.org/cache/singleflight"
 	"sync"
 )
 
@@ -26,10 +27,11 @@ var (
 
 // Group 相当于缓存命名空间，与数据源有关
 type Group struct {
-	name      string     //名称
-	getter    Getter     //回调函数
-	mainCache cache      //缓存
-	peers     PeerPicker //节点选取器
+	name      string              //名称
+	getter    Getter              //回调函数
+	mainCache cache               //缓存
+	peers     PeerPicker          //节点选取器
+	loader    *singleflight.Group //singleflight加载器
 }
 
 // Get 缓存获取
@@ -48,21 +50,26 @@ func (g *Group) Get(key string) (ByteView, error) {
 }
 
 //缓存加载
-func (g *Group) load(key string) (ByteView, error) {
-	//远程加载缓存
-	if g.peers != nil {
-		if peerGetter, ok := g.peers.PickPeer(key); ok {
-			if v, err := g.getFromPeer(peerGetter, key); err == nil {
-				//填充缓存
-				g.populateCache(key, v)
-				return v, nil
+func (g *Group) load(key string) (value ByteView, err error) {
+	//加载缓存
+	view, err := g.loader.Do(key, func() (interface{}, error) {
+		//远程加载缓存
+		if g.peers != nil {
+			if peerGetter, ok := g.peers.PickPeer(key); ok {
+				if v, err := g.getFromPeer(peerGetter, key); err == nil {
+					return v, nil
+				}
+				log.Printf("[ss-cache]从远程节点加载缓存失败")
 			}
-			log.Printf("[ss-cache]从远程节点加载缓存失败")
 		}
-	}
+		//调用回调函数从本地加载缓存
+		return g.getLocally(key)
+	})
 
-	//调用回调函数从本地加载缓存
-	return g.getLocally(key)
+	if err == nil {
+		return view.(ByteView), nil
+	}
+	return
 }
 
 // 从远程节点加载缓存
@@ -114,6 +121,7 @@ func NewGroup(name string, cacheMaxBytes uint64, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheMaxBytes: cacheMaxBytes},
+		loader:    &singleflight.Group{},
 	}
 	//放进map
 	groups[name] = g

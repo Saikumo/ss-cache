@@ -40,6 +40,10 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	//截取参数
 	parts := strings.SplitN(req.URL.Path[len(p.basePath):], "/", 2)
+	if len(parts) != 2 {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
 	groupName := parts[0]
 	key := parts[1]
 
