@@ -2,9 +2,12 @@ package cache
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
+	"saikumo.org/cache/cachepb"
 	"saikumo.org/cache/consistenthash"
 	"strings"
 	"sync"
@@ -61,9 +64,18 @@ func (p *HTTPPool) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	//protobuf编码
+	body, err := proto.Marshal(&cachepb.Response{
+		Value: view.ByteSlice(),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	//返回值
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(view.ByteSlice())
+	w.Write(body)
 }
 
 // Set 初始化一致性hash算法的节点
@@ -107,27 +119,32 @@ type httpGetter struct {
 }
 
 // Get 从http获取缓存值
-func (getter *httpGetter) Get(group string, key string) ([]byte, error) {
+func (getter *httpGetter) Get(in *cachepb.Request, out *cachepb.Response) error {
 	//拼接URL
-	url := fmt.Sprintf("%s%s/%s", getter.baseURL, group, key)
+	u := fmt.Sprintf("%s%s/%s", getter.baseURL,
+		url.QueryEscape(in.GetGroup()), url.QueryEscape(in.GetKey()))
 	//请求
-	res, err := http.Get(url)
+	res, err := http.Get(u)
 	defer res.Body.Close()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	//状态码错误
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("服务器错误 %v", res.StatusCode)
+		return fmt.Errorf("服务器错误 %v", res.StatusCode)
 	}
 	//读取Body
 	bytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("读取Body错误 %v", err)
+		return fmt.Errorf("读取Body错误 %v", err)
+	}
+	//解码protobuf
+	if err := proto.Unmarshal(bytes, out); err != nil {
+		return fmt.Errorf("解码protobuf发生错误%v", err)
 	}
 
-	return bytes, nil
+	return nil
 }
 
 //验证httpGetter是否实现了PeerGetter

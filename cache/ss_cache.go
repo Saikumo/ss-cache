@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"log"
+	"saikumo.org/cache/cachepb"
 	"saikumo.org/cache/singleflight"
 	"sync"
 )
@@ -74,11 +75,16 @@ func (g *Group) load(key string) (value ByteView, err error) {
 
 // 从远程节点加载缓存
 func (g *Group) getFromPeer(getter PeerGetter, key string) (ByteView, error) {
-	bytes, err := getter.Get(g.name, key)
+	req := &cachepb.Request{
+		Group: g.name,
+		Key:   key,
+	}
+	res := &cachepb.Response{}
+	err := getter.Get(req, res)
 	if err != nil {
 		return ByteView{}, err
 	}
-	return ByteView{b: cloneBytes(bytes)}, nil
+	return ByteView{b: cloneBytes(res.Value)}, nil
 }
 
 //调用回调函数从本地加载缓存
